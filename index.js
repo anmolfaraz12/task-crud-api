@@ -49,6 +49,32 @@ let tasks = [
     tasks.push(newTask);
     res.status(201).json(newTask);
   });  
+  app.put('/tasks/:id', (req, res) => {
+    const task = tasks.find(t => t.id === parseInt(req.params.id));
+    if (!task) {
+      return res.status(404).json({ error: `Task ${req.params.id} not found` });
+    }
+  
+    const { title, done } = req.body;
+    if (title === undefined && done === undefined) {
+      return res.status(400).json({ error: "Provide title or done to update" });
+    }
+  
+    if (title !== undefined) task.title = title;
+    if (done !== undefined) task.done = done;
+  
+    res.json(task);
+  });
+  
+  app.delete('/tasks/:id', (req, res) => {
+    const index = tasks.findIndex(t => t.id === parseInt(req.params.id));
+    if (index === -1) {
+      return res.status(404).json({ error: `Task ${req.params.id} not found` });
+    }
+  
+    tasks.splice(index, 1);
+    res.status(204).send();
+  });
 app.listen(3000, () => {
     console.log('Server is running on port 3000');
 });
