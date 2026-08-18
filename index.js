@@ -27,9 +27,30 @@ let tasks = [
   ];
   
   app.get('/tasks', (req, res) => {
-    res.json(tasks);
-  });
+    let result = tasks;
   
+    // Filtering: /tasks?done=true or /tasks?done=false
+    if (req.query.done !== undefined) {
+      const doneFilter = req.query.done === 'true';
+      result = result.filter(t => t.done === doneFilter);
+    }
+  
+    // Search: /tasks?search=milk
+    if (req.query.search) {
+      const searchTerm = req.query.search.toLowerCase();
+      result = result.filter(t => t.title.toLowerCase().includes(searchTerm));
+    }
+  
+    res.json(result);
+  });
+
+  app.get('/stats', (req, res) => {
+    const total = tasks.length;
+    const done = tasks.filter(t => t.done).length;
+    const open = total - done;
+    res.json({ total, done, open });
+  });
+
   app.get('/tasks/:id', (req, res) => {
     const task = tasks.find(t => t.id === parseInt(req.params.id));
     if (!task) {
@@ -78,6 +99,14 @@ let tasks = [
   
     tasks.splice(index, 1);
     res.status(204).send();
+  });
+  app.post('/reset', (req, res) => {
+    tasks = [
+      { id: 1, title: "Buy milk", done: false },
+      { id: 2, title: "Learn Express", done: false },
+      { id: 3, title: "Build API", done: false }
+    ];
+    res.json({ message: "Tasks reset to default", tasks });
   });
 app.listen(3000, () => {
     console.log('Server is running on port 3000');
