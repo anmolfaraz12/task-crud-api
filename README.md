@@ -57,10 +57,13 @@ curl -i -X POST http://localhost:3000/tasks -H "Content-Type: application/json" 
 ```
 
 Response:
+```bash
 HTTP/1.1 201 Created
 Content-Type: application/json; charset=utf-8
 
 {"id":4,"title":"Buy milk","done":false}
-The Mortality Experiment
+```
+
+## The Mortality Experiment
 
 Since this API stores data in-memory (a JavaScript array), all data is lost when the server restarts. During testing, a task added while the server was running disappeared after restarting — only the original 3 hardcoded dummy tasks remained. This happens because in-memory data only exists while the Node.js process is running; there is no database or file persisting it. This is the reason a database will be introduced in Week 3.
