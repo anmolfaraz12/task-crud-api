@@ -48,7 +48,7 @@ Once the server is running, visit:
 
 http://localhost:3000/docs
 
-![Swagger UI Screenshot](swagger-screenshot.png)
+<img src="swagger-screenshot.png" alt="Swagger UI Screenshot" width="600">
 
 ## Example Request
 
