@@ -21,6 +21,12 @@ app.get('/health' , (req, res) => {
     });
 });
 
+let tasks = [
+    { id: 1, title: "Buy milk", done: false },
+    { id: 2, title: "Learn Express", done: false },
+    { id: 3, title: "Build API", done: false }
+  ];
+
 const db = new Database('tasks.db');
 
 // Create the tasks table if it doesn't already exist
@@ -41,23 +47,10 @@ if (countRow.count === 0) {
   insertSeed.run('Build API', 0);
 }
 
-  app.get('/tasks', (req, res) => {
-    let result = tasks;
-  
-    // Filtering: /tasks?done=true or /tasks?done=false
-    if (req.query.done !== undefined) {
-      const doneFilter = req.query.done === 'true';
-      result = result.filter(t => t.done === doneFilter);
-    }
-  
-    // Search: /tasks?search=milk
-    if (req.query.search) {
-      const searchTerm = req.query.search.toLowerCase();
-      result = result.filter(t => t.title.toLowerCase().includes(searchTerm));
-    }
-  
-    res.json(result);
-  });
+app.get('/tasks', (req, res) => {
+  const result = db.prepare('SELECT * FROM tasks').all();
+  res.json(result);
+});
 
   app.get('/stats', (req, res) => {
     const total = tasks.length;
@@ -67,12 +60,13 @@ if (countRow.count === 0) {
   });
 
   app.get('/tasks/:id', (req, res) => {
-    const task = tasks.find(t => t.id === parseInt(req.params.id));
+    const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
     if (!task) {
       return res.status(404).json({ error: `Task ${req.params.id} not found` });
     }
     res.json(task);
   });
+
   app.post('/tasks', (req, res) => {
     const { title } = req.body;
   
