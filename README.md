@@ -1,91 +1,84 @@
 # Task API
 
-A database-backed CRUD API for managing a to-do list, built with Node.js, Express, and SQLite (`better-sqlite3`). Includes interactive Swagger UI documentation.
-Built as part of the **FlyRank Internship — Backend Track, Week 3, Assignment A2**.
+A CRUD API for managing a to-do list, built with Node.js and Express.
+Data is stored in a SQLite database (`tasks.db`) so it survives server restarts.
 
-## Features
+*This project started as an in-memory CRUD API and was later migrated to use a
+SQLite database for persistent storage.*
 
-* Full CRUD operations (Create, Read, Update, Delete) backed by a persistent SQLite database (`tasks.db`).
-* Safe database operations using parameterized queries (SQL injection prevention).
-* Input validation with proper HTTP status codes (`200`, `201`, `204`, `400`, `404`).
-* Interactive API documentation via Swagger UI.
-* Useful endpoints for health, stats, and database reset.
+## How to run
 
-## Tech Stack
-
-* **Node.js**
-* **Express**
-* **better-sqlite3** (SQLite Database)
-* **swagger-ui-express**
-
-## How to Install & Run
-
-1. **Install Dependencies:**
 ```bash
 npm install
-
-```
-
-
-2. **Run the Server:**
-```bash
 node index.js
-
 ```
 
+Server runs on http://localhost:3000
+Swagger docs at http://localhost:3000/docs
 
-
-Server will start on `http://localhost:3000`. The SQLite database file (`tasks.db`) will be created automatically on the first run with seeded example tasks.
+The database file (`tasks.db`) and its `tasks` table are created automatically the
+first time you run the app, along with 3 seeded example tasks (only if the table is empty).
 
 ## Endpoints
 
-| Method | Path | Description |
-| --- | --- | --- |
-| **GET** | `/` | API info |
-| **GET** | `/health` | Health check |
-| **GET** | `/tasks` | Get all tasks (fetched from SQLite DB) |
-| **GET** | `/tasks/:id` | Get a single task by ID |
-| **POST** | `/tasks` | Create a new task |
-| **PUT** | `/tasks/:id` | Update a task title or status |
-| **DELETE** | `/tasks/:id` | Delete a task |
-| **GET** | `/stats` | Get task statistics (total, done, open via SQL count) |
-| **POST** | `/reset` | Reset DB to 3 default tasks |
+| Method | Path         | Description                          |
+|--------|--------------|---------------------------------------|
+| GET    | /            | API info                              |
+| GET    | /health      | Health check                          |
+| GET    | /tasks       | List all tasks                        |
+| GET    | /tasks/:id   | Get one task                          |
+| POST   | /tasks       | Create a task                         |
+| PUT    | /tasks/:id   | Update a task                         |
+| DELETE | /tasks/:id   | Delete a task                         |
+| GET    | /stats       | Task counts (total, done, open)       |
+| POST   | /reset       | Reset database to 3 default tasks     |
 
-## API Documentation (Swagger UI)
-
-Once the server is running, visit:
-
-`http://localhost:3000/docs`
-
-## Example Request & Response
+## Example request
 
 ```bash
-curl -i -X POST http://localhost:3000/tasks -H "Content-Type: application/json" -d "{\"title\":\"Buy milk\"}"
-
+curl -i -X POST http://localhost:3000/tasks -H "Content-Type: application/json" -d '{"title":"Buy milk"}'
 ```
 
-**Response:**
-
-```http
-HTTP/1.1 201 Created
-Content-Type: application/json; charset=utf-8
-
+Response:
+```json
 {"id":4,"title":"Buy milk","done":0}
-
 ```
 
-## Why SQLite & Persistence Proof
+## Swagger screenshot
 
-In Week 2, the API used in-memory arrays, so restarting the server deleted all created tasks. In Week 3, storage was migrated to a **SQLite** database (`tasks.db`).
+![Swagger UI](./swagger-screenshot.png)
 
-* **Why SQLite:** It is a lightweight, serverless, single-file database requiring zero additional database setup while providing full relational database capabilities.
-* **Persistence:** Tasks now survive server restarts because data is written directly to disk (`tasks.db`) rather than kept in RAM memory.
+---
 
-### Database Exploration
+## Database
 
-Data verified through direct SQL execution:
+### Why SQLite?
+SQLite was chosen because it needs no separate server or installation — the whole
+database is just one file (`tasks.db`). This makes it perfect for a small project like
+this: zero setup, and unlike storing data in memory, the data survives a server restart.
 
+### Where the database lives
+The database file is `tasks.db`, created automatically in the project folder the first
+time the app runs, using `CREATE TABLE IF NOT EXISTS`. Three example tasks are seeded
+only when the table is empty, so restarting the server never duplicates them.
+
+### Proof of persistence
+Tasks created through `POST /tasks` are written directly to `tasks.db` using SQL
+`INSERT` statements. Stopping and restarting the server does not clear them — unlike
+the earlier in-memory version, where all data was lost on every restart.
+
+### Database screenshot
+![Database view](./db-screenshot.png)
+
+### Example SQL query
 ```sql
 SELECT * FROM tasks;
-
 ```
+This lists every task currently in the database — confirming that tasks created
+through the API (such as "Test persistence") are actually saved to `tasks.db` and
+survive a server restart, not just kept in memory.
+
+### Parameterized queries
+All queries that use user input (`WHERE id = ?`, `INSERT INTO tasks (title, done)
+VALUES (?, ?)`, etc.) use `?` placeholders instead of gluing values directly into the
+SQL string. This keeps the database safe from SQL injection.
