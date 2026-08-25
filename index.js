@@ -1,7 +1,7 @@
 const express = require('express');
 const swaggerUi = require('swagger-ui-express');
 const openapiSpec = require('./openapi.json');
-const Database = require('better-sqlite3');
+const { pool, initDb } = require('./db');
 const app = express();
 
 app.use(express.json());
@@ -21,44 +21,29 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Database Setup
-const db = new Database('tasks.db');
-
-// Create the tasks table if it doesn't already exist
-db.exec(`
-  CREATE TABLE IF NOT EXISTS tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    done INTEGER NOT NULL DEFAULT 0
-  )
-`);
-
-// Seed 3 example tasks — only if the table is empty
-const countRow = db.prepare('SELECT COUNT(*) AS count FROM tasks').get();
-if (countRow.count === 0) {
-  const insertSeed = db.prepare('INSERT INTO tasks (title, done) VALUES (?, ?)');
-  insertSeed.run('Buy milk', 0);
-  insertSeed.run('Learn Express', 0);
-  insertSeed.run('Build API', 0);
-}
-
 // GET /tasks - Fetch all tasks from DB
-app.get('/tasks', (req, res) => {
-  const result = db.prepare('SELECT * FROM tasks').all();
-  res.json(result);
+app.get('/tasks', async (req, res) => {
+  const result = await pool.query('SELECT * FROM tasks');
+  res.json(result.rows);
 });
 
 // GET /stats - Compute stats using SQL
-app.get('/stats', (req, res) => {
-  const total = db.prepare('SELECT COUNT(*) AS count FROM tasks').get().count;
-  const done = db.prepare('SELECT COUNT(*) AS count FROM tasks WHERE done = 1').get().count;
+app.get('/stats', async (req, res) => {
+  const totalResult = await pool.query('SELECT COUNT(*) AS count FROM tasks');
+  const doneResult = await pool.query('SELECT COUNT(*) AS count FROM tasks WHERE done = true');
+
+  const total = parseInt(totalResult.rows[0].count, 10);
+  const done = parseInt(doneResult.rows[0].count, 10);
   const open = total - done;
+
   res.json({ total, done, open });
 });
 
 // GET /tasks/:id - Fetch single task by ID from DB
-app.get('/tasks/:id', (req, res) => {
-  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+app.get('/tasks/:id', async (req, res) => {
+  const result = await pool.query('SELECT * FROM tasks WHERE id = $1', [req.params.id]);
+  const task = result.rows[0];
+
   if (!task) {
     return res.status(404).json({ error: `Task ${req.params.id} not found` });
   }
@@ -66,25 +51,29 @@ app.get('/tasks/:id', (req, res) => {
 });
 
 // POST /tasks - Create a new task in DB
-app.post('/tasks', (req, res) => {
+app.post('/tasks', async (req, res) => {
   const { title } = req.body;
 
   if (!title || title.trim() === "") {
     return res.status(400).json({ error: "Title is required" });
   }
 
-  const result = db.prepare('INSERT INTO tasks (title, done) VALUES (?, ?)').run(title, 0);
-  const newTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(result.lastInsertRowid);
+  const result = await pool.query(
+    'INSERT INTO tasks (title, done) VALUES ($1, $2) RETURNING *',
+    [title, false]
+  );
 
-  res.status(201).json(newTask);
+  res.status(201).json(result.rows[0]);
 });
 
 // PUT /tasks/:id - Update task in DB
-app.put('/tasks/:id', (req, res) => {
+app.put('/tasks/:id', async (req, res) => {
   const { id } = req.params;
   const { title, done } = req.body;
 
-  const existingTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
+  const existingResult = await pool.query('SELECT * FROM tasks WHERE id = $1', [id]);
+  const existingTask = existingResult.rows[0];
+
   if (!existingTask) {
     return res.status(404).json({ error: `Task ${id} not found` });
   }
@@ -94,44 +83,53 @@ app.put('/tasks/:id', (req, res) => {
   }
 
   const newTitle = title !== undefined ? title : existingTask.title;
-  let newDone = existingTask.done;
-  if (done !== undefined) {
-    newDone = done ? 1 : 0;
-  }
+  const newDone = done !== undefined ? Boolean(done) : existingTask.done;
 
-  db.prepare('UPDATE tasks SET title = ?, done = ? WHERE id = ?').run(newTitle, newDone, id);
-  const updatedTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
+  const updatedResult = await pool.query(
+    'UPDATE tasks SET title = $1, done = $2 WHERE id = $3 RETURNING *',
+    [newTitle, newDone, id]
+  );
 
-  res.json(updatedTask);
+  res.json(updatedResult.rows[0]);
 });
 
 // DELETE /tasks/:id - Delete task from DB
-app.delete('/tasks/:id', (req, res) => {
+app.delete('/tasks/:id', async (req, res) => {
   const { id } = req.params;
 
-  const existingTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
-  if (!existingTask) {
+  const existingResult = await pool.query('SELECT * FROM tasks WHERE id = $1', [id]);
+  if (!existingResult.rows[0]) {
     return res.status(404).json({ error: `Task ${id} not found` });
   }
 
-  db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
+  await pool.query('DELETE FROM tasks WHERE id = $1', [id]);
   res.status(204).send();
 });
 
 // POST /reset - Reset database to default tasks
-app.post('/reset', (req, res) => {
-  db.prepare('DELETE FROM tasks').run();
-  db.prepare('DELETE FROM sqlite_sequence WHERE name="tasks"').run();
+app.post('/reset', async (req, res) => {
+  await pool.query('DELETE FROM tasks');
+  await pool.query('ALTER SEQUENCE tasks_id_seq RESTART WITH 1');
 
-  const insertSeed = db.prepare('INSERT INTO tasks (title, done) VALUES (?, ?)');
-  insertSeed.run('Buy milk', 0);
-  insertSeed.run('Learn Express', 0);
-  insertSeed.run('Build API', 0);
+  await pool.query(
+    `INSERT INTO tasks (title, done) VALUES
+      ('Buy milk', false),
+      ('Learn Express', false),
+      ('Build API', false)`
+  );
 
-  const tasks = db.prepare('SELECT * FROM tasks').all();
-  res.json({ message: "Tasks reset to default", tasks });
+  const result = await pool.query('SELECT * FROM tasks');
+  res.json({ message: "Tasks reset to default", tasks: result.rows });
 });
 
-app.listen(3000, () => {
-    console.log('Server is running on port 3000');
-});
+// Database ready hone ke baad hi server start karo
+initDb()
+  .then(() => {
+    app.listen(3000, () => {
+      console.log('Server is running on port 3000');
+    });
+  })
+  .catch((err) => {
+    console.error('Failed to connect to database:', err);
+    process.exit(1);
+  });
