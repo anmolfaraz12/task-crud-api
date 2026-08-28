@@ -161,13 +161,14 @@ app.post('/reset', async (req, res) => {
   const result = await pool.query('SELECT * FROM tasks');
   res.json({ message: "Tasks reset to default", tasks: result.rows });
 });
+
 // GET /public/info - No auth needed
 app.get('/public/info', (req, res) => {
   res.status(200).json({ message: "Welcome stranger! This info is public." });
 });
 
-// GET /protected/profile - Check token presence (verification not yet)
-app.get('/protected/profile', (req, res) => {
+// GET /protected/profile - Verify token with Supabase (Stage 3)
+app.get('/protected/profile', async (req, res) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.split(' ')[1] === '') {
@@ -176,9 +177,19 @@ app.get('/protected/profile', (req, res) => {
 
   const token = authHeader.split(' ')[1];
 
-  // Stage 2: sirf check kar rahe hain token bheja gaya hai, verify nahi kar rahe abhi
-  res.status(200).json({ message: 'Token received (not verified yet)', tokenPreview: token.substring(0, 20) + '...' });
+  const { data, error } = await supabase.auth.getUser(token);
+
+  if (error || !data.user) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  res.status(200).json({
+    id: data.user.id,
+    email: data.user.email,
+    created_at: data.user.created_at
+  });
 });
+
 // Database ready hone ke baad hi server start karo
 initDb()
   .then(() => {
