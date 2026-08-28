@@ -161,7 +161,24 @@ app.post('/reset', async (req, res) => {
   const result = await pool.query('SELECT * FROM tasks');
   res.json({ message: "Tasks reset to default", tasks: result.rows });
 });
+// GET /public/info - No auth needed
+app.get('/public/info', (req, res) => {
+  res.status(200).json({ message: "Welcome stranger! This info is public." });
+});
 
+// GET /protected/profile - Check token presence (verification not yet)
+app.get('/protected/profile', (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.split(' ')[1] === '') {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  // Stage 2: sirf check kar rahe hain token bheja gaya hai, verify nahi kar rahe abhi
+  res.status(200).json({ message: 'Token received (not verified yet)', tokenPreview: token.substring(0, 20) + '...' });
+});
 // Database ready hone ke baad hi server start karo
 initDb()
   .then(() => {
