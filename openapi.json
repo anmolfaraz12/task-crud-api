@@ -1,77 +1,184 @@
 {
-    "openapi": "3.0.0",
-    "info": {
-      "title": "Task API",
-      "version": "1.0.0",
-      "description": "A simple in-memory CRUD API for managing tasks"
-    },
-    "servers": [{ "url": "http://localhost:3000" }],
-    "paths": {
-      "/tasks": {
-        "get": {
-          "summary": "Get all tasks",
-          "responses": { "200": { "description": "List of tasks" } }
-        },
-        "post": {
-          "summary": "Create a new task",
-          "requestBody": {
-            "required": true,
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": { "title": { "type": "string" } },
-                  "required": ["title"]
-                }
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Task API",
+    "version": "1.0.0",
+    "description": "A simple in-memory CRUD API for managing tasks, now with Supabase authentication"
+  },
+  "servers": [{ "url": "http://localhost:3000" }],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "paths": {
+    "/auth/signup": {
+      "post": {
+        "summary": "Register a new user",
+        "tags": ["Auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" }
+                },
+                "required": ["email", "password"]
               }
             }
-          },
-          "responses": {
-            "201": { "description": "Task created" },
-            "400": { "description": "Invalid input" }
           }
+        },
+        "responses": {
+          "201": { "description": "User created" },
+          "400": { "description": "Invalid input or Supabase error" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Log in and receive access + refresh tokens",
+        "tags": ["Auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" }
+                },
+                "required": ["email", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login successful, tokens returned" },
+          "400": { "description": "Missing email or password" },
+          "401": { "description": "Invalid login credentials" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "Log out the current user",
+        "tags": ["Auth"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "204": { "description": "Logged out successfully" },
+          "401": { "description": "Missing, malformed, or invalid token" }
+        }
+      }
+    },
+    "/public/info": {
+      "get": {
+        "summary": "Public info, no auth required",
+        "tags": ["Public"],
+        "responses": {
+          "200": { "description": "Public message" }
+        }
+      }
+    },
+    "/protected/profile": {
+      "get": {
+        "summary": "Get the logged-in user's profile",
+        "tags": ["Protected"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "User profile data" },
+          "401": { "description": "Missing, malformed, or invalid/expired token" }
+        }
+      }
+    },
+    "/protected/dashboard": {
+      "get": {
+        "summary": "Get the logged-in user's dashboard",
+        "tags": ["Protected"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Dashboard welcome message" },
+          "401": { "description": "Missing, malformed, or invalid/expired token" }
+        }
+      }
+    },
+    "/tasks": {
+      "get": {
+        "summary": "Get all tasks",
+        "tags": ["Tasks"],
+        "responses": { "200": { "description": "List of tasks" } }
+      },
+      "post": {
+        "summary": "Create a new task",
+        "tags": ["Tasks"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "title": { "type": "string" } },
+                "required": ["title"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Task created" },
+          "400": { "description": "Invalid input" }
+        }
+      }
+    },
+    "/tasks/{id}": {
+      "get": {
+        "summary": "Get a single task",
+        "tags": ["Tasks"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Task found" },
+          "404": { "description": "Task not found" }
         }
       },
-      "/tasks/{id}": {
-        "get": {
-          "summary": "Get a single task",
-          "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
-          "responses": {
-            "200": { "description": "Task found" },
-            "404": { "description": "Task not found" }
-          }
-        },
-        "put": {
-          "summary": "Update a task",
-          "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
-          "requestBody": {
-            "required": true,
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "title": { "type": "string" },
-                    "done": { "type": "boolean" }
-                  }
+      "put": {
+        "summary": "Update a task",
+        "tags": ["Tasks"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string" },
+                  "done": { "type": "boolean" }
                 }
               }
             }
-          },
-          "responses": {
-            "200": { "description": "Task updated" },
-            "400": { "description": "Invalid input" },
-            "404": { "description": "Task not found" }
           }
         },
-        "delete": {
-          "summary": "Delete a task",
-          "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
-          "responses": {
-            "204": { "description": "Task deleted" },
-            "404": { "description": "Task not found" }
-          }
+        "responses": {
+          "200": { "description": "Task updated" },
+          "400": { "description": "Invalid input" },
+          "404": { "description": "Task not found" }
+        }
+      },
+      "delete": {
+        "summary": "Delete a task",
+        "tags": ["Tasks"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "204": { "description": "Task deleted" },
+          "404": { "description": "Task not found" }
         }
       }
     }
   }
+}
