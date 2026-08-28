@@ -8,6 +8,26 @@ const app = express();
 app.use(express.json());
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(openapiSpec));
 
+// ===== Auth middleware (Stage 4) =====
+async function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.split(' ')[1] === '') {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  const { data, error } = await supabase.auth.getUser(token);
+
+  if (error || !data.user) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  req.user = data.user;
+  next();
+}
+
 app.get('/', (req, res) => {
     res.json({
         name: "Task API",
@@ -59,6 +79,17 @@ app.post('/auth/login', async (req, res) => {
     access_token: data.session.access_token,
     refresh_token: data.session.refresh_token
   });
+});
+
+// POST /auth/logout - Protected via middleware (Stage 4)
+app.post('/auth/logout', requireAuth, async (req, res) => {
+  const { error } = await supabase.auth.signOut();
+
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  res.status(204).send();
 });
 
 // GET /tasks - Fetch all tasks from DB
@@ -167,26 +198,19 @@ app.get('/public/info', (req, res) => {
   res.status(200).json({ message: "Welcome stranger! This info is public." });
 });
 
-// GET /protected/profile - Verify token with Supabase (Stage 3)
-app.get('/protected/profile', async (req, res) => {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.split(' ')[1] === '') {
-    return res.status(401).json({ error: 'Access token required' });
-  }
-
-  const token = authHeader.split(' ')[1];
-
-  const { data, error } = await supabase.auth.getUser(token);
-
-  if (error || !data.user) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
-
+// GET /protected/profile - Protected via middleware (Stage 4)
+app.get('/protected/profile', requireAuth, (req, res) => {
   res.status(200).json({
-    id: data.user.id,
-    email: data.user.email,
-    created_at: data.user.created_at
+    id: req.user.id,
+    email: req.user.email,
+    created_at: req.user.created_at
+  });
+});
+
+// GET /protected/dashboard - Second protected route to prove middleware reuse (Stage 4 checkpoint)
+app.get('/protected/dashboard', requireAuth, (req, res) => {
+  res.status(200).json({
+    message: `Welcome to your dashboard, ${req.user.email}!`
   });
 });
 
